@@ -1,13 +1,23 @@
-# Second Look API
+# Second Look — Intelligence Service
 
-Turn a photo of an outfit into shoppable product matches. Point it at an
-image, get back the individual garments detected in it; feed one of those
-garments back in and get real product listings spanning a splurge-to-budget
-price spread.
+Turns a photo of an outfit into shoppable product matches, spanning a
+splurge-to-budget price spread. This repo is the **intelligence service**
+behind **Second Look**, a [Base44](https://base44.com) app — the frontend
+lives entirely on Base44, not here.
 
-Built for a Shopify hackathon. Deployed on [Modal](https://modal.com).
+**Live app:** https://second-look.base44.app/
+**Frontend repo:** https://github.com/fin1cky/second-look
+**This service (API), deployed on [Modal](https://modal.com):** https://fin1cky--second-look-api-fastapi-app.modal.run
 
-**Live URL:** https://fin1cky--second-look-api-fastapi-app.modal.run
+## Architecture
+
+Base44 owns the app shell: auth, database, UI, and hosting for the live app.
+This service owns the intelligence Base44 calls into — Gemini vision
+attribute extraction from a photo (`/analyze`), multi-provider product
+matching across 17 real Shopify storefronts plus Google Shopping (`/match`),
+and an LLM rerank pass that enforces genuine category accuracy (so a boxer
+brief can't slip through on a sunglasses search) before results ever reach
+the UI. Deployed independently of Base44, on Modal.
 
 ## Status
 
