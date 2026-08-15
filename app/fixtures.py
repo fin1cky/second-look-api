@@ -1,6 +1,6 @@
-"""Hardcoded sample payloads used until the real vision/catalog calls land."""
+"""Hardcoded sample payload used until the real vision model call lands."""
 
-from app.schemas import AnalyzeItem, AnalyzeResponse, MatchResponse, Product
+from app.schemas import AnalyzeItem, AnalyzeResponse
 
 SAMPLE_ANALYZE_RESPONSE = AnalyzeResponse(
     items=[
@@ -32,99 +32,4 @@ SAMPLE_ANALYZE_RESPONSE = AnalyzeResponse(
             confidence=0.91,
         ),
     ]
-)
-
-SAMPLE_MATCH_RESPONSE = MatchResponse(
-    primary=[
-        Product(
-            title="Oversized Distressed Denim Jacket",
-            brand="Levi's",
-            price=128.00,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-1.jpg",
-            product_url="https://levis.com/products/oversized-distressed-denim-jacket",
-            shop_name="Levi's",
-            is_secondhand=False,
-            upid="upid_primary_001",
-        ),
-        Product(
-            title="Vintage Wash Denim Jacket",
-            brand="Urban Outfitters",
-            price=98.00,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-2.jpg",
-            product_url="https://urbanoutfitters.com/products/vintage-wash-denim-jacket",
-            shop_name="Urban Outfitters",
-            is_secondhand=False,
-            upid="upid_primary_002",
-        ),
-        Product(
-            title="Second-Hand Oversized Denim Jacket",
-            brand="Wrangler",
-            price=64.00,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-3.jpg",
-            product_url="https://thredup.com/products/wrangler-denim-jacket",
-            shop_name="ThredUp",
-            is_secondhand=True,
-            upid="upid_primary_003",
-        ),
-        Product(
-            title="Distressed Denim Jacket",
-            brand="Gap",
-            price=110.00,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-4.jpg",
-            product_url="https://gap.com/products/distressed-denim-jacket",
-            shop_name="Gap",
-            is_secondhand=False,
-            upid="upid_primary_004",
-        ),
-    ],
-    budget=[
-        Product(
-            title="Thrifted Oversized Denim Jacket",
-            brand="Unbranded",
-            price=32.00,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-5.jpg",
-            product_url="https://depop.com/products/thrifted-denim-jacket",
-            shop_name="Depop",
-            is_secondhand=True,
-            upid="upid_budget_001",
-        ),
-        Product(
-            title="Basic Denim Jacket",
-            brand="Old Navy",
-            price=44.99,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-6.jpg",
-            product_url="https://oldnavy.com/products/basic-denim-jacket",
-            shop_name="Old Navy",
-            is_secondhand=False,
-            upid="upid_budget_002",
-        ),
-        Product(
-            title="Second-Hand Distressed Jacket",
-            brand="Levi's",
-            price=49.00,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-7.jpg",
-            product_url="https://thredup.com/products/levis-distressed-jacket",
-            shop_name="ThredUp",
-            is_secondhand=True,
-            upid="upid_budget_003",
-        ),
-        Product(
-            title="Light Wash Denim Jacket",
-            brand="H&M",
-            price=39.99,
-            currency="USD",
-            image_url="https://cdn.shopify.com/s/files/1/0001/sample/denim-jacket-8.jpg",
-            product_url="https://hm.com/products/light-wash-denim-jacket",
-            shop_name="H&M",
-            is_secondhand=False,
-            upid="upid_budget_004",
-        ),
-    ],
 )

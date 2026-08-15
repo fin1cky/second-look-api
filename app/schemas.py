@@ -40,8 +40,10 @@ class Product(BaseModel):
     shop_name: str
     is_secondhand: bool
     upid: str
+    relevance_score: float
 
 
 class MatchResponse(BaseModel):
     primary: list[Product]
+    mid: list[Product]
     budget: list[Product]
