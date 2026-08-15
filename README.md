@@ -124,26 +124,64 @@ or scope bug. `app/catalog.py` keeps both working client implementations
 docstring for the full diagnosis).
 
 Instead, `app/storefronts.py` fetches `/products.json` directly from a
-curated list of ten real Shopify storefronts — a public, unauthenticated
+curated list of 17 real Shopify storefronts — a public, unauthenticated
 endpoint every Shopify store exposes, and one that Modal *can* reach. Each
 store's catalog is fetched once and cached in memory (never re-fetched per
-request). A search ranks all cached products by keyword overlap between the
-query (`search_query` + `category` + `color` + `material`) and each
-product's title/type/tags, then slices the ranked list into the three price
-tiers above.
+request). Note that some familiar mainstream retailers (Nike, Adidas, Uniqlo,
+H&M, Gap, Abercrombie, Hollister, Tommy Hilfiger) simply aren't Shopify-hosted
+and can never appear here regardless of curation.
+
+A search ranks cached products in three steps:
+1. **Category filter** — hard-excludes products whose `product_type`/`tags`
+   share no keyword with the requested `category` (matched via a synonym
+   map, since categories are free-form text from Gemini, not a fixed enum).
+   This is what stops a sunglasses query from ever returning shoes.
+2. **Weighted relevance score** — token overlap between the query
+   (`search_query` + `material`) and each product's title/type/tags, with
+   `color` weighted 3x a generic keyword hit so a color-correct result
+   outranks a looser style match in the wrong color.
+3. **Per-store cap** — each tier (`primary`/`mid`/`budget`) allows at most 2
+   items from any single store, so one deep catalog can't fill an entire
+   tier by itself.
 
 Trade-offs worth knowing:
-- Relevance comes from token overlap against ten stores, not Shopify's own
+- Relevance comes from token overlap against 17 stores, not Shopify's own
   cross-merchant search ranking — a stand-in, not equivalent coverage. A
-  query for something none of the ten stores carry (e.g. dress shoes) will
-  still return its nearest keyword matches rather than nothing.
+  query for something none of the 17 stores carry will still return its
+  nearest keyword matches rather than nothing.
 - Every result is new: single-brand storefronts don't carry secondhand
   inventory, so `is_secondhand` is always `false` today (the Catalog API path
   in `app/catalog.py` does support a real secondhand signal).
-- The ten stores (`app/storefronts.py: STORES`) span footwear, apparel,
-  homeware, and accessories across premium, mid, and budget price points —
-  chosen and verified reachable specifically to make all three tiers show a
-  real spread.
+- Keyword matching has occasional false positives from ambiguous retail
+  vocabulary (e.g. jewelry "ear jackets" surfacing on an outerwear-adjacent
+  "jacket" search) — an inherent limit of this approach, not a bug to chase
+  to zero.
+
+The 17 stores (`app/storefronts.py: STORES`), verified reachable and with
+real catalog depth (20-50+ SKUs sampled per store):
+
+| Store | Category | Rough price range |
+|---|---|---|
+| True Classic | basics/staples (tees) | $63–$150 |
+| Fresh Clean Tees | basics/staples (tees) | $16–$136 |
+| Bear Bottom Clothing | basics/staples | $15–$288 |
+| Allbirds | footwear (sneakers) | $3–$160 |
+| TOMS | footwear (casual shoes) | $50–$110 |
+| Rothy's | footwear (flats) | $55–$225 |
+| Quay Australia | eyewear | $29–$370 |
+| Goodr | eyewear | $30–$50 |
+| Pit Viper | eyewear | $14–$120 |
+| Dagne Dover | bags/accessories | $7–$675 |
+| Pura Vida Bracelets | bags/accessories | $3–$90 |
+| ban.do | bags/accessories | $12–$248 |
+| Taylor Stitch | outerwear | $55–$278 |
+| Rains | outerwear | $15–$529 |
+| KAVU | outerwear | $18–$135 |
+| Gymshark | apparel (athleisure) | $25–$64 |
+| Chubbies | apparel (bottoms) | $40–$90 |
+
+Premium anchors: Rothy's, Dagne Dover, Taylor Stitch, Rains. Budget anchors:
+Fresh Clean Tees, Bear Bottom Clothing, Goodr, Pura Vida Bracelets.
 
 ## Architecture
 
