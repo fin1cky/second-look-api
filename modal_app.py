@@ -11,7 +11,7 @@ image = (
 app = modal.App("second-look-api", image=image)
 
 
-@app.function(secrets=[modal.Secret.from_name("gemini-api-key")])
+@app.function(secrets=[modal.Secret.from_name("gemini-api-key"), modal.Secret.from_name("serper-key")])
 @modal.asgi_app()
 def fastapi_app():
     from app.main import app as web_app

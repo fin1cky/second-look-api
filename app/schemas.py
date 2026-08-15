@@ -28,6 +28,7 @@ class MatchRequest(BaseModel):
     color: str
     material: str
     style_descriptors: list[str]
+    label: str | None = None
 
 
 class Product(BaseModel):
@@ -41,6 +42,7 @@ class Product(BaseModel):
     is_secondhand: bool
     upid: str
     relevance_score: float
+    source: str = "shopify"
 
 
 class MatchResponse(BaseModel):

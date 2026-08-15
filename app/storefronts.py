@@ -24,6 +24,7 @@ import threading
 
 import httpx
 
+from app import rerank, shopping
 from app.schemas import Product
 
 STORES = [
@@ -192,6 +193,7 @@ def _to_product(product: dict, variant: dict, relevance_score: float) -> Product
         is_secondhand=False,
         upid=f"{store['domain']}:{product.get('id')}",
         relevance_score=round(relevance_score, 4),
+        source="shopify",
     )
 
 
@@ -238,17 +240,43 @@ def _pick_top(candidates: list[Product], n: int, cap_per_store: int = MAX_PER_ST
     return picked
 
 
-def match_products(
-    search_query: str, category: str, color: str, material: str
-) -> tuple[list[Product], list[Product], list[Product]]:
-    ranked = _rank(search_query, category, color, material)
+OVERFETCH_SIZE = 20
 
-    primary = _pick_top(ranked, 4)
+
+def _overfetch_pool(ranked: list[Product]) -> list[Product]:
+    """Build a price-diverse candidate pool for the rerank pass: ~20 top
+    matches at any price, plus ~20 more in the mid and budget price bands
+    (bands drawn from the keyword-ranked top 4, same as the original tier
+    logic), so a strict LLM filter still has enough of each price point to
+    work with rather than just the single highest-relevance cluster."""
+    primary_pool = _pick_top(ranked, OVERFETCH_SIZE)
+    if not primary_pool:
+        return []
+
+    used_upids = {p.upid for p in primary_pool}
+    remaining = [p for p in ranked if p.upid not in used_upids]
+    median_price = statistics.median(p.price for p in primary_pool[:4])
+
+    mid_pool = _pick_top(
+        [p for p in remaining if median_price * 0.5 <= p.price <= median_price], OVERFETCH_SIZE
+    )
+    used_upids |= {p.upid for p in mid_pool}
+    remaining = [p for p in remaining if p.upid not in used_upids]
+
+    budget_pool = _pick_top([p for p in remaining if p.price < median_price * 0.5], OVERFETCH_SIZE)
+    if not budget_pool:
+        budget_pool = _pick_top(sorted(remaining, key=lambda p: p.price), OVERFETCH_SIZE)
+
+    return primary_pool + mid_pool + budget_pool
+
+
+def _slice_tiers(candidates: list[Product]) -> tuple[list[Product], list[Product], list[Product]]:
+    primary = _pick_top(candidates, 4)
     if not primary:
         return [], [], []
 
     used_upids = {p.upid for p in primary}
-    remaining = [p for p in ranked if p.upid not in used_upids]
+    remaining = [p for p in candidates if p.upid not in used_upids]
     median_price = statistics.median(p.price for p in primary)
 
     mid_candidates = [p for p in remaining if median_price * 0.5 <= p.price <= median_price]
@@ -262,3 +290,43 @@ def match_products(
         budget = _pick_top(sorted(remaining, key=lambda p: p.price), 4)
 
     return primary, mid, budget
+
+
+def match_products(
+    search_query: str,
+    category: str,
+    color: str,
+    material: str,
+    label: str = "",
+    style_descriptors: list[str] | None = None,
+) -> tuple[list[Product], list[Product], list[Product]]:
+    shopify_ranked = _rank(search_query, category, color, material)
+    # Serper is a second, independent product source (Google Shopping) — its
+    # own internal cache + try/except means a bad key, timeout, or quota
+    # exhaustion just yields [] here rather than raising. Merge into one pool
+    # before over-fetch/rerank so both sources go through the same strict
+    # category check and the same price-tiering.
+    shopping_ranked = shopping.search(search_query)
+    ranked = sorted(shopify_ranked + shopping_ranked, key=lambda p: p.relevance_score, reverse=True)
+    if not ranked:
+        return [], [], []
+
+    # Over-fetch top ~20 candidates per price band (instead of settling for
+    # the final 4 right away) and send them to Gemini once for a strict
+    # same-category check — keyword overlap alone lets through same-tag
+    # noise (e.g. a boxer brief tagged "accessories" showing up for a
+    # sunglasses search). One rerank call per /match request, not one per
+    # tier or per candidate.
+    llm_ranked = rerank.rerank(
+        _overfetch_pool(ranked),
+        label=label or search_query,
+        category=category,
+        color=color,
+        material=material,
+        style_descriptors=style_descriptors or [],
+    )
+
+    # Any rerank failure (timeout, bad response, quota, network error) falls
+    # straight back to plain keyword ranking — this pass only improves
+    # quality, it never gates whether /match returns results.
+    return _slice_tiers(llm_ranked if llm_ranked is not None else ranked)

@@ -29,6 +29,11 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 @app.post("/match", response_model=MatchResponse)
 def match(request: MatchRequest) -> MatchResponse:
     primary, mid, budget = match_products(
-        request.search_query, request.category, request.color, request.material
+        request.search_query,
+        request.category,
+        request.color,
+        request.material,
+        label=request.label or "",
+        style_descriptors=request.style_descriptors,
     )
     return MatchResponse(primary=primary, mid=mid, budget=budget)
