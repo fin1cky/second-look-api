@@ -11,6 +11,24 @@ This is a quality pass, not a dependency: any failure (timeout, bad
 response, quota, network error) returns None, and the caller falls back to
 the plain keyword ranking. /match must never break because Gemini is slow,
 rate-limited, or down.
+
+Uses temperature 0: this is a strict yes/no category judgment, not a
+creative task, and flash at default temperature was inconsistent
+call-to-call on the same input — letting a boxer brief through on one run
+of a query and correctly excluding it on the next. Sticking to the flash
+tier deliberately: this API key's free tier has a 0-request quota for any
+pro model (confirmed via a live 429 RESOURCE_EXHAUSTED — pro requires
+billing enabled, not just a model-name swap).
+
+Known sharp edge: "gemini-flash-latest" currently resolves to a model with
+its own free-tier cap as low as 20 requests/day, shared with app/vision.py's
+/analyze calls on the same API key. Once exhausted, every rerank call fails
+with 429 and falls back to keyword-only ranking exactly like any other
+failure — safe, but silent, so a fully-exhausted quota is indistinguishable
+from "rerank is working" without checking logs. If /match quality seems to
+regress to plain keyword ranking, check for 429s before assuming a rerank
+logic bug. TIMEOUT_MS must also stay >= 10s: Gemini rejects shorter
+deadlines outright with a 400.
 """
 
 import json
@@ -22,7 +40,8 @@ from google.genai import types
 from app.schemas import Product
 
 MODEL = "gemini-flash-latest"
-TIMEOUT_MS = 8_000
+TIMEOUT_MS = 15_000  # Gemini rejects any deadline under 10s outright
+TEMPERATURE = 0.0
 
 PROMPT_TEMPLATE = """A shopper is looking for a specific item with these attributes:
 - label: {label}
@@ -33,9 +52,13 @@ PROMPT_TEMPLATE = """A shopper is looking for a specific item with these attribu
 
 Below is a list of candidate products (id, title, brand, price) pulled by a keyword search.
 Some of these are NOT actually the same kind of item as the target — they only surfaced
-because of loose keyword or tag overlap (for example, a boxer brief showing up for a
-"black round sunglasses" search). Be strict: exclude anything that is not genuinely the
-same product category as the target, even if it shares color, material, or brand.
+because of loose keyword or tag overlap. For example, a boxer brief is not a match for a
+"black round sunglasses" search, and a beaded choker necklace is not a match for a "brown
+leather tote bag" search, even though both got tagged "accessories" by the store that
+sells them. Judge by what the product IS (a bag, a shoe, a jacket, eyewear, etc.), not by
+which store category or tag it happened to be filed under. Be strict: exclude anything
+that is not genuinely the same product type as the target, even if it shares color,
+material, or brand.
 
 Return the ids of only the genuine matches, ordered best match first. It is better to
 return fewer results than to include a bad one. If none of the candidates are good
@@ -99,6 +122,7 @@ def rerank(
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=RESULT_SCHEMA,
+                temperature=TEMPERATURE,
                 http_options=types.HttpOptions(timeout=TIMEOUT_MS),
             ),
         )
