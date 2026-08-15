@@ -11,16 +11,18 @@ Built for a Shopify hackathon. Deployed on [Modal](https://modal.com).
 
 ## Status
 
-`/match` hits real, live product data (see [How /match sources products](#how-match-sources-products)
-below for why it's not Shopify's centralized Catalog API). `/analyze` still
-returns the hardcoded sample response from Step 1 — real Gemini vision call
-lands next, see [Roadmap](#roadmap).
+Both endpoints are live against real data: `/analyze` calls Gemini for
+structured garment detection, `/match` hits real, live product data (see
+[How /match sources products](#how-match-sources-products) below for why
+it's not Shopify's centralized Catalog API).
 
 ## Endpoints
 
 ### `POST /analyze`
 
-Detects garments in a photo.
+Detects garments in a photo using Gemini (`gemini-flash-latest`), forced to
+structured JSON output via a response schema — no prose, no markdown
+fencing.
 
 **Request**
 ```json
@@ -48,7 +50,8 @@ or
 }
 ```
 
-Capped at 5 items per image.
+Capped at 5 items per image (enforced both in the response schema and again
+in code).
 
 ### `POST /match`
 
@@ -98,6 +101,16 @@ separate searches:
   to 4. If nothing qualifies at that price, falls back to the cheapest
   remaining matches rather than returning empty.
 
+## How `/analyze` uses Gemini
+
+`app/vision.py` sends the image (fetched and base64'd if given as a URL) plus
+a prompt to `gemini-flash-latest` with `response_mime_type=application/json`
+and an explicit `response_schema`, so Gemini can't return prose — only JSON
+matching the item shape above. The Gemini API key is read from the
+`gemini-api-key` Modal secret (`GEMINI_API_KEY`), never hardcoded. Transient
+`503`s from Gemini (demand spikes are common) get retried twice with backoff
+before surfacing as a `502` to the caller.
+
 ## How `/match` sources products
 
 The original design called for Shopify's centralized Catalog API
@@ -121,7 +134,9 @@ tiers above.
 
 Trade-offs worth knowing:
 - Relevance comes from token overlap against ten stores, not Shopify's own
-  cross-merchant search ranking — a stand-in, not equivalent coverage.
+  cross-merchant search ranking — a stand-in, not equivalent coverage. A
+  query for something none of the ten stores carry (e.g. dress shoes) will
+  still return its nearest keyword matches rather than nothing.
 - Every result is new: single-brand storefronts don't carry secondhand
   inventory, so `is_secondhand` is always `false` today (the Catalog API path
   in `app/catalog.py` does support a real secondhand signal).
@@ -136,7 +151,7 @@ Trade-offs worth knowing:
 app/
   main.py         FastAPI app, route definitions
   schemas.py      Pydantic request/response models
-  fixtures.py     Hardcoded /analyze sample payload (current stand-in)
+  vision.py       Real /analyze implementation: Gemini structured-output call
   storefronts.py  Real /match implementation: per-store product cache + ranking
   catalog.py      Shopify Catalog API clients (REST + MCP) — unused today,
                   blocked by Cloudflare from Modal's egress; kept for when
@@ -149,6 +164,7 @@ modal_app.py      Modal deployment entrypoint (modal deploy modal_app.py)
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+export GEMINI_API_KEY=...  # only needed to exercise /analyze locally
 uvicorn app.main:app --reload
 ```
 
@@ -158,11 +174,11 @@ uvicorn app.main:app --reload
 modal deploy modal_app.py
 ```
 
-Prints the live URL on success.
+Prints the live URL on success. Requires the `gemini-api-key` Modal secret
+(`GEMINI_API_KEY`) to be set up beforehand.
 
 ## Roadmap
 
-- [ ] `/analyze`: real Gemini vision call, structured JSON output, 5-item cap
 - [ ] `/match`: unblock Shopify Catalog API egress from Modal (static IP +
       allowlist, or another path) and switch back to `app/catalog.py` for
       real cross-merchant search + secondhand data

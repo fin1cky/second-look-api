@@ -4,14 +4,14 @@ import modal
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("fastapi[standard]", "httpx", "pydantic")
+    .pip_install("fastapi[standard]", "httpx", "pydantic", "google-genai")
     .add_local_dir("app", remote_path="/root/app")
 )
 
 app = modal.App("second-look-api", image=image)
 
 
-@app.function()
+@app.function(secrets=[modal.Secret.from_name("gemini-api-key")])
 @modal.asgi_app()
 def fastapi_app():
     from app.main import app as web_app
